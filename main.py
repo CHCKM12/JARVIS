@@ -1,258 +1,201 @@
 import streamlit as st
-import speech_recognition as sr
-import pyttsx3
-import datetime
-import webbrowser
-import urllib.parse
-import time
-import os
+import streamlit.components.v1 as components
 
 # ==========================================
-# 1. PAGE SETUP & CSS INJECTION
+# 1. STREAMLIT PAGE CONFIGURATION
 # ==========================================
 st.set_page_config(page_title="J.A.R.V.I.S. // MK-IV", layout="wide", page_icon="🤖")
 
+# Hide Streamlit's default menus, headers, and padding to make it a fullscreen app
 st.markdown("""
-<style>
-    /* Dark Theme & Sci-Fi Font */
-    body, .stApp {
-        background-color: #02060a;
-        color: #00f3ff;
-        font-family: 'Courier New', Courier, monospace;
-    }
-    
-    /* Hide Streamlit Default UI Elements */
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
-    
-    /* Custom Button Styling */
-    div.stButton > button {
-        background-color: rgba(0, 243, 255, 0.1);
-        color: #00f3ff;
-        border: 1px solid #00f3ff;
-        padding: 15px 40px;
-        font-size: 1.2rem;
-        text-transform: uppercase;
-        letter-spacing: 3px;
-        width: 100%;
-        transition: 0.3s;
-    }
-    div.stButton > button:hover {
-        background-color: #00f3ff;
-        color: #02060a;
-        box-shadow: 0 0 20px #00f3ff;
-    }
-</style>
+    <style>
+        .block-container { padding: 0rem; max-width: 100%; }
+        header { visibility: hidden; }
+        #MainMenu { visibility: hidden; }
+        footer { visibility: hidden; }
+        iframe { border: none; width: 100vw; height: 100vh; }
+    </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. INITIALIZE SESSION STATE & AUDIO ENGINE
+# 2. CLOUD-NATIVE HARDWARE ENGINE
 # ==========================================
-if 'logs' not in st.session_state:
-    st.session_state.logs =[]
-if 'is_awake' not in st.session_state:
-    st.session_state.is_awake = False
-if 'mode' not in st.session_state:
-    st.session_state.mode = "standard"
+# We embed the UI and Audio engine directly into Streamlit. 
+# This forces the Microphone and Speakers to execute on the USER'S browser, 
+# completely bypassing the Linux Cloud Server's hardware limitations.
 
-# Cache the Text-to-Speech engine so it doesn't crash Streamlit
-@st.cache_resource
-def get_tts_engine():
-    engine = pyttsx3.init()
-    voices = engine.getProperty('voices')
-    # Try to set Male voice (Windows usually has David or Ravi)
-    for v in voices:
-        if 'male' in v.name.lower() or 'ravi' in v.name.lower() or 'david' in v.name.lower():
-            engine.setProperty('voice', v.id)
-            break
-    engine.setProperty('rate', 160) # Speed of speech
-    return engine
-
-engine = get_tts_engine()
-
-def speak(text):
-    update_logs("jarvis", text)
-    engine.say(text)
-    engine.runAndWait()
-
-# ==========================================
-# 3. UI LAYOUT & COMPONENTS
-# ==========================================
-st.markdown("<h1 style='text-align: center; color: #00f3ff; letter-spacing: 10px; text-shadow: 0 0 10px #00f3ff;'>J.A.R.V.I.S. // MK-IV</h1>", unsafe_allow_html=True)
-st.markdown("<hr style='border: 1px solid rgba(0, 243, 255, 0.3);'>", unsafe_allow_html=True)
-
-col1, col2, col3 = st.columns([1, 1.5, 1])
-
-# --- LEFT PANEL: TELEMETRY ---
-with col1:
-    st.markdown("<div style='color:#fff; font-weight:bold; margin-bottom:10px;'>> SYS.MONITOR</div>", unsafe_allow_html=True)
-    telemetry_box = st.empty()
-
-def update_telemetry():
-    hex_val = hex(int(time.time() * 1000))[-6:].upper()
-    lat = (time.time() % 100)
-    html = f"""
-    <div style='border: 1px solid rgba(0, 243, 255, 0.2); background: rgba(0, 243, 255, 0.05); padding: 15px; height: 350px;'>
-        <div style='color: rgba(0,243,255,0.7); font-size: 0.9rem;'>[SEC_{hex_val}] LAT:{lat:.4f} // OK</div>
-        <div style='color: rgba(0,243,255,0.7); font-size: 0.9rem;'>[SYS_CORE] MEM_ALLOC // STABLE</div>
-        <div style='color: rgba(0,243,255,0.7); font-size: 0.9rem;'>[NET_UPLINK] PING: 12ms // ACTIVE</div>
-    </div>
-    """
-    telemetry_box.markdown(html, unsafe_allow_html=True)
-
-# --- CENTER PANEL: REACTOR ---
-with col2:
-    status_text = st.empty()
-    status_text.markdown("<h3 style='text-align:center; color:#ff003c; text-shadow: 0 0 10px #ff003c;'>SYSTEM OFFLINE</h3>", unsafe_allow_html=True)
-    
-    # Render the CSS Reactor Animation
-    st.components.v1.html("""
+jarvis_cloud_engine = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>J.A.R.V.I.S.</title>
     <style>
-        .reactor { position: relative; width: 300px; height: 300px; margin: auto; display: flex; justify-content: center; align-items: center;}
+        :root { --cyan: #00f3ff; --blue: #0055ff; --red: #ff003c; --bg-dark: #02060a; --glass: rgba(0, 243, 255, 0.05); --scanline: rgba(0, 243, 255, 0.1); }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: var(--bg-dark); color: var(--cyan); font-family: 'Courier New', Courier, monospace; height: 100vh; overflow: hidden; display: flex; justify-content: center; align-items: center; background-image: radial-gradient(circle at center, #051322 0%, #000 100%), linear-gradient(0deg, transparent 24%, var(--scanline) 25%, var(--scanline) 26%, transparent 27%, transparent 74%, var(--scanline) 75%, var(--scanline) 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, var(--scanline) 25%, var(--scanline) 26%, transparent 27%, transparent 74%, var(--scanline) 75%, var(--scanline) 76%, transparent 77%, transparent); background-size: 100% 100%, 50px 50px, 50px 50px; }
+        #hud-container { width: 95vw; height: 95vh; position: relative; display: grid; grid-template-columns: 250px 1fr 300px; grid-template-rows: 80px 1fr 100px; gap: 20px; border: 1px solid rgba(0, 243, 255, 0.2); padding: 20px; box-shadow: inset 0 0 50px rgba(0, 243, 255, 0.05); }
+        #hud-container::before, #hud-container::after { content: ''; position: absolute; width: 40px; height: 40px; border: 3px solid var(--cyan); }
+        #hud-container::before { top: -2px; left: -2px; border-right: none; border-bottom: none; }
+        #hud-container::after { bottom: -2px; right: -2px; border-left: none; border-top: none; }
+        header { grid-column: 1 / 4; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(0, 243, 255, 0.3); }
+        h1 { font-size: 2rem; letter-spacing: 10px; text-shadow: 0 0 10px var(--cyan); text-transform: uppercase; }
+        .status-box { font-size: 1.2rem; color: var(--red); text-shadow: 0 0 10px var(--red); animation: pulse 2s infinite; }
+        .telemetry-panel { grid-row: 2 / 3; grid-column: 1 / 2; background: var(--glass); border: 1px solid rgba(0, 243, 255, 0.2); padding: 15px; font-size: 0.8rem; overflow: hidden; display: flex; flex-direction: column; gap: 10px; }
+        .telemetry-line { opacity: 0.7; }
+        .ai-core-container { grid-row: 2 / 3; grid-column: 2 / 3; display: flex; justify-content: center; align-items: center; position: relative; }
+        .reactor { position: relative; width: 300px; height: 300px; display: flex; justify-content: center; align-items: center; }
         .ring { position: absolute; border-radius: 50%; border: 2px solid transparent; }
-        .ring-1 { width: 300px; height: 300px; border-top: 3px solid #00f3ff; border-left: 1px dashed #00f3ff; animation: spin 5s linear infinite; }
-        .ring-2 { width: 260px; height: 260px; border-right: 4px solid #0055ff; border-bottom: 2px dotted #00f3ff; animation: spin-reverse 3s linear infinite; }
-        .ring-3 { width: 220px; height: 220px; border: 1px dashed #00f3ff; animation: spin 2s linear infinite; }
-        .core { width: 100px; height: 100px; background: radial-gradient(circle, #00f3ff 0%, transparent 70%); border-radius: 50%; box-shadow: 0 0 60px #00f3ff, inset 0 0 30px #fff; animation: core-pulse 1s infinite alternate; }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        @keyframes spin-reverse { 100% { transform: rotate(-360deg); } }
-        @keyframes core-pulse { 0% { transform: scale(0.9); box-shadow: 0 0 20px #00f3ff; } 100% { transform: scale(1.1); box-shadow: 0 0 60px #00f3ff, inset 0 0 30px #fff; } }
+        .ring-1 { width: 300px; height: 300px; border-top: 3px solid var(--cyan); border-bottom: 3px solid var(--cyan); border-left: 1px dashed var(--cyan); animation: spin 10s linear infinite; }
+        .ring-2 { width: 260px; height: 260px; border-right: 4px solid var(--blue); border-left: 4px solid var(--blue); border-bottom: 2px dotted var(--cyan); animation: spin-reverse 6s linear infinite; }
+        .ring-3 { width: 220px; height: 220px; border: 1px dashed var(--cyan); animation: spin 4s linear infinite; }
+        .core { width: 100px; height: 100px; background: radial-gradient(circle, var(--cyan) 0%, transparent 70%); border-radius: 50%; box-shadow: 0 0 40px var(--cyan), inset 0 0 20px #fff; opacity: 0.2; transition: all 0.3s ease; }
+        .listening .core { opacity: 1; animation: core-pulse 1s infinite alternate; }
+        .listening .ring-1 { animation: spin 3s linear infinite; box-shadow: 0 0 15px var(--cyan); }
+        .listening .ring-2 { animation: spin-reverse 2s linear infinite; }
+        .terminal-panel { grid-row: 2 / 3; grid-column: 3 / 4; background: var(--glass); border: 1px solid rgba(0, 243, 255, 0.2); padding: 15px; display: flex; flex-direction: column; overflow-y: auto; backdrop-filter: blur(5px); }
+        .log { margin-bottom: 10px; font-size: 0.9rem; line-height: 1.4; word-wrap: break-word;}
+        .log-jarvis { color: var(--cyan); } .log-error { color: var(--red); font-weight: bold; } .log-user { color: #fff; text-align: right; font-style: italic; opacity: 0.8; }
+        .log-jarvis::before { content: "J.A.R.V.I.S: "; font-weight: bold; } .log-error::before { content: "SYSTEM ERROR: "; font-weight: bold; } .log-user::before { content: "USER: "; font-weight: bold; }
+        .control-panel { grid-row: 3 / 4; grid-column: 1 / 4; display: flex; justify-content: center; align-items: center; border-top: 1px solid rgba(0, 243, 255, 0.3); }
+        button { background: rgba(0, 243, 255, 0.1); color: var(--cyan); border: 1px solid var(--cyan); padding: 15px 40px; font-size: 1.2rem; text-transform: uppercase; letter-spacing: 3px; cursor: pointer; transition: 0.3s; position: relative; overflow: hidden; }
+        button:hover { background: var(--cyan); color: var(--bg-dark); box-shadow: 0 0 20px var(--cyan); }
+        @keyframes spin { 100% { transform: rotate(360deg); } } @keyframes spin-reverse { 100% { transform: rotate(-360deg); } } @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } } @keyframes core-pulse { 0% { transform: scale(0.9); box-shadow: 0 0 20px var(--cyan); } 100% { transform: scale(1.1); box-shadow: 0 0 60px var(--cyan), inset 0 0 30px #fff; } }
+        .scan-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,243,255,0.1) 50%, rgba(0,243,255,0.1)); background-size: 100% 6px; pointer-events: none; z-index: 100; opacity: 0.4; }
     </style>
-    <div class="reactor"><div class="ring ring-1"></div><div class="ring ring-2"></div><div class="ring ring-3"></div><div class="core"></div></div>
-    """, height=350)
+</head>
+<body>
+    <div class="scan-overlay"></div>
+    <div id="hud-container">
+        <header>
+            <h1>J.A.R.V.I.S. // MK-IV</h1>
+            <div id="status-text" class="status-box">SYSTEM OFFLINE</div>
+        </header>
+        <div class="telemetry-panel" id="telemetry">
+            <div style="color:#fff; font-weight:bold; margin-bottom:10px;">> SYS.MONITOR</div>
+        </div>
+        <div class="ai-core-container">
+            <div class="reactor" id="reactor">
+                <div class="ring ring-1"></div><div class="ring ring-2"></div><div class="ring ring-3"></div><div class="core"></div>
+            </div>
+        </div>
+        <div class="terminal-panel" id="terminal">
+            <div class="log log-jarvis">Awaiting system initialization...</div>
+        </div>
+        <div class="control-panel">
+            <button id="power-btn" onclick="toggleSystem()">Initialize System</button>
+        </div>
+    </div>
 
-# --- RIGHT PANEL: TERMINAL LOGS ---
-with col3:
-    st.markdown("<div style='color:#fff; font-weight:bold; margin-bottom:10px;'>> TERMINAL LOGS</div>", unsafe_allow_html=True)
-    log_box = st.empty()
+<script>
+    const terminal = document.getElementById("terminal");
+    const reactor = document.getElementById("reactor");
+    const statusText = document.getElementById("status-text");
+    const powerBtn = document.getElementById("power-btn");
+    const telemetry = document.getElementById("telemetry");
 
-def update_logs(sender, message):
-    st.session_state.logs.append((sender, message))
-    if len(st.session_state.logs) > 8: # Keep terminal clean
-        st.session_state.logs.pop(0)
+    let isAwake = false;
+    let currentMode = "standard"; 
     
-    log_html = "<div style='border: 1px solid rgba(0, 243, 255, 0.2); background: rgba(0, 243, 255, 0.05); padding: 15px; height: 350px; overflow-y: auto;'>"
-    for s, m in st.session_state.logs:
-        if s == "jarvis":
-            log_html += f"<div style='color: #00f3ff; margin-bottom: 10px; font-size: 0.9rem;'><b>J.A.R.V.I.S:</b> {m}</div>"
-        elif s == "user":
-            log_html += f"<div style='color: #fff; margin-bottom: 10px; font-size: 0.9rem; text-align: right; font-style: italic;'><b>USER:</b> {m}</div>"
-        else:
-            log_html += f"<div style='color: #ff003c; margin-bottom: 10px; font-size: 0.9rem;'><b>ERROR:</b> {m}</div>"
-    log_html += "</div>"
-    log_box.markdown(log_html, unsafe_allow_html=True)
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition;
+    let selectedVoice = null;
 
-# Initialize blank UI
-if not st.session_state.is_awake:
-    telemetry_box.markdown("<div style='border: 1px solid rgba(0, 243, 255, 0.2); background: rgba(0, 243, 255, 0.05); padding: 15px; height: 350px;'><span style='color:#ff003c'>OFFLINE</span></div>", unsafe_allow_html=True)
-    update_logs("jarvis", "Awaiting system initialization...")
+    function loadVoices() {
+        const voices = window.speechSynthesis.getVoices();
+        if(voices.length > 0) {
+            selectedVoice = voices.find(v => v.name.includes('Ravi')) || voices.find(v => v.name.includes('Daniel')) || voices.find(v => v.name.toLowerCase().includes('male') && v.lang.includes('en')) || voices[0];
+        }
+    }
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    loadVoices(); 
 
-# ==========================================
-# 4. AI COMMAND LOGIC
-# ==========================================
-def process_command(cmd):
-    cmd = cmd.lower()
-    
-    # 1. DICTATION MODE (Taking Notes)
-    if st.session_state.mode == "dictation":
-        if any(w in cmd for w in ["cancel", "stop", "band karo"]):
-            speak("Note cancelled.")
-            st.session_state.mode = "standard"
-        else:
-            # Writes note directly to your actual computer desktop/folder
-            with open("Jarvis_Data.txt", "a") as f:
-                f.write(cmd + "\n")
-            speak("Yes sir, I have saved your note to Jarvis Data dot text.")
-            st.session_state.mode = "standard"
-        return True
+    if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = false;
+        recognition.lang = 'en-IN'; 
 
-    # 2. STANDARD COMMANDS
-    if any(w in cmd for w in ["hello", "namaste", "hi", "kaise ho"]):
-        speak("Hello sir. All systems are running at optimal capacity.")
-        
-    elif any(w in cmd for w in ["time", "samay", "baj rahe"]):
-        t = datetime.datetime.now().strftime("%I:%M %p")
-        speak(f"Sir, the current time is {t}")
-        
-    elif any(w in cmd for w in["date", "tareekh", "aaj kya hai"]):
-        d = datetime.datetime.now().strftime("%B %d, %Y")
-        speak(f"Today's date is {d}")
-        
-    elif any(w in cmd for w in ["youtube"]):
-        speak("Yes sir, opening YouTube.")
-        webbrowser.open("https://youtube.com")
-        
-    elif any(w in cmd for w in ["google"]):
-        speak("Accessing Google mainframe.")
-        webbrowser.open("https://google.com")
-        
-    elif any(w in cmd for w in ["search", "dhundo", "batao"]):
-        query = cmd.replace("search", "").replace("for", "").replace("karo", "").replace("dhundo", "").replace("jarvis", "").strip()
-        if query:
-            speak(f"Searching the web for {query}")
-            webbrowser.open(f"https://www.google.com/search?q={urllib.parse.quote(query)}")
-        else:
-            speak("Sir, what would you like me to search for?")
-            
-    elif any(w in cmd for w in ["note", "likho"]):
-        speak("Dictation mode activated. Please tell me, what should I save?")
-        st.session_state.mode = "dictation"
-        
-    elif any(w in cmd for w in["sleep", "so jao", "shut down", "stop listening"]):
-        speak("Powering down. Goodbye sir.")
-        st.session_state.is_awake = False
-        return False # This breaks the loop
-        
-    else:
-        speak("I'm sorry sir, I did not catch that.")
-        
-    return True
+        recognition.onstart = () => {
+            reactor.classList.add("listening");
+            statusText.innerText = "ONLINE // LISTENING...";
+            statusText.style.color = "var(--cyan)";
+            powerBtn.innerText = "System Override (Sleep)";
+        };
 
-# ==========================================
-# 5. MAIN EXECUTION LOOP (Controls bottom)
-# ==========================================
-st.markdown("<br><br>", unsafe_allow_html=True)
-col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
+        recognition.onerror = (event) => {
+            writeLog("error", "Mic Issue: " + event.error);
+        };
 
-with col_btn2:
-    if st.button("INITIALIZE SYSTEM"):
-        st.session_state.is_awake = True
-        status_text.markdown("<h3 style='text-align:center; color:#00f3ff; text-shadow: 0 0 10px #00f3ff;'>ONLINE // LISTENING...</h3>", unsafe_allow_html=True)
-        speak("System online. Hello sir, I am listening.")
-        
-        # Setup Local Speech Recognition
-        recognizer = sr.Recognizer()
-        with sr.Microphone() as source:
-            recognizer.adjust_for_ambient_noise(source, duration=1)
-            
-            # Real-time continuous loop
-            while st.session_state.is_awake:
-                update_telemetry() # Keep UI visually active
-                
-                try:
-                    # Listens in 3-second bursts to keep Streamlit UI responsive
-                    audio = recognizer.listen(source, timeout=3, phrase_time_limit=10)
-                    text = recognizer.recognize_google(audio, language='en-IN')
-                    
-                    # Remove punctuation
-                    clean_text = ''.join(char for char in text if char.isalnum() or char.isspace()).strip()
-                    update_logs("user", clean_text)
-                    
-                    # Process it
-                    if not process_command(clean_text):
-                        break # Exits loop if told to sleep
-                        
-                except sr.WaitTimeoutError:
-                    # Timeout just means nobody spoke. We loop back to update UI.
-                    continue
-                except sr.UnknownValueError:
-                    # Ignored mumbling
-                    continue
-                except sr.RequestError as e:
-                    update_logs("error", "Network API Error. Check Internet connection.")
-                    speak("Sir, I cannot connect to the global speech database.")
-                    break
-                    
-        # When loop breaks (Sleep)
-        status_text.markdown("<h3 style='text-align:center; color:#ff003c; text-shadow: 0 0 10px #ff003c;'>SYSTEM OFFLINE</h3>", unsafe_allow_html=True)
-        st.rerun() # Refresh page to reset state
+        recognition.onend = () => {
+            if (isAwake) { setTimeout(() => { try { recognition.start(); } catch(e) {} }, 800); } 
+            else { reactor.classList.remove("listening"); statusText.innerText = "SYSTEM OFFLINE"; statusText.style.color = "var(--red)"; powerBtn.innerText = "Initialize System"; }
+        };
+
+        recognition.onresult = (event) => {
+            let rawTranscript = event.results[event.results.length - 1][0].transcript.toLowerCase();
+            writeLog("user", rawTranscript);
+            processCommand(rawTranscript.replace(/[.,\\/#!$%\\^&\\*;:{}=\\-_`~()]/g, "").trim());
+        };
+    } else {
+        writeLog("error", "Your browser does not support Speech Recognition. You MUST use Google Chrome.");
+    }
+
+    function toggleSystem() {
+        if (!SpeechRecognition) { alert("Please use Google Chrome for this to work."); return; }
+        if (!isAwake) { isAwake = true; try { recognition.start(); } catch(e) {} startTelemetry(); speak("System online. Hello sir, I am listening."); } 
+        else { isAwake = false; recognition.stop(); stopTelemetry(); speak("Powering down. Goodbye sir."); }
+    }
+
+    function speak(text) {
+        writeLog("jarvis", text);
+        const utterance = new SpeechSynthesisUtterance(text);
+        if (selectedVoice) utterance.voice = selectedVoice;
+        utterance.rate = 1.0; utterance.pitch = 0.8; 
+        window.speechSynthesis.speak(utterance);
+    }
+
+    function writeLog(sender, text) {
+        const div = document.createElement("div");
+        div.className = `log log-${sender}`; div.innerText = text;
+        terminal.appendChild(div); terminal.scrollTop = terminal.scrollHeight; 
+    }
+
+    let telemetryInterval;
+    function startTelemetry() {
+        telemetryInterval = setInterval(() => {
+            if(telemetry.children.length > 15) telemetry.removeChild(telemetry.children[1]); 
+            const div = document.createElement("div"); div.className = "telemetry-line";
+            div.innerText = `[SEC_${Math.floor(Math.random() * 0xFFFFFF).toString(16).toUpperCase()}] LAT:${(Math.random() * 100).toFixed(4)} // OK`;
+            telemetry.appendChild(div);
+        }, 800);
+    }
+    function stopTelemetry() { clearInterval(telemetryInterval); telemetry.innerHTML = '<div style="color:#fff; font-weight:bold; margin-bottom:10px;">> SYS.MONITOR</div><div class="telemetry-line" style="color:var(--red)">OFFLINE</div>'; }
+
+    function processCommand(cmd) {
+        if (currentMode === "dictation") {
+            if (cmd.includes("cancel") || cmd.includes("stop") || cmd.includes("band karo")) { speak("Note cancelled."); currentMode = "standard"; return; }
+            const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([cmd], { type: "text/plain" })); a.download = "Jarvis_Data.txt"; a.click();
+            speak("Yes sir, I have saved your note."); currentMode = "standard"; return;
+        }
+        if (cmd.includes("hello") || cmd.includes("namaste") || cmd.includes("hi")) speak("Hello sir. All systems are running at optimal capacity.");
+        else if (cmd.includes("time") || cmd.includes("samay") || cmd.includes("baj rahe")) speak("Sir, the current time is " + new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }));
+        else if (cmd.includes("date") || cmd.includes("taarikh") || cmd.includes("aaj kya hai")) speak("Today's date is " + new Date().toLocaleDateString('en-IN'));
+        else if (cmd.includes("youtube")) { speak("Yes sir, opening YouTube."); window.open("https://youtube.com", "_blank"); }
+        else if (cmd.includes("google")) { speak("Accessing Google mainframe."); window.open("https://google.com", "_blank"); }
+        else if (cmd.includes("search") || cmd.includes("dhundo") || cmd.includes("batao")) {
+            let query = cmd.replace("search karo", "").replace("search for", "").replace("search", "").replace("dhundo", "").replace("batao", "").replace("jarvis", "").trim();
+            if (query) { speak("Searching the web for " + query); window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, "_blank"); } 
+            else speak("Sir, what would you like me to search for?");
+        }
+        else if (cmd.includes("note") || cmd.includes("likho")) { speak("Dictation mode activated. Please tell me, what should I save?"); currentMode = "dictation"; }
+        else if (cmd.includes("so jao") || cmd.includes("shut down") || cmd.includes("sleep")) toggleSystem();
+        else speak("I did not catch that. Try saying 'Hello', 'What is the time', or 'Open YouTube'.");
+    }
+</script>
+</body>
+</html>
+"""
+
+# Render the Cloud UI inside Streamlit
+components.html(jarvis_cloud_engine, height=1000, scrolling=False)
